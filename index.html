@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microsoft Lists</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+    <style>
+        :root {
+            --bg-body:#faf9f8; --bg-white:#fff; --bg-sidebar:#f3f2f1; --border:#e1dfdd;
+            --text-primary:#1b1a19; --text-secondary:#605e5c; --accent:#0078d4;
+            --accent-hover:#106ebe; --radius-sm:4px; --radius-md:6px; --radius-lg:8px;
+            --font:'Segoe UI',-apple-system,BlinkMacSystemFont,'Roboto',sans-serif;
+            --sidebar-width:260px;
+        }
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:var(--font);font-size:14px;color:var(--text-primary);background:var(--bg-body);display:flex;height:100vh;overflow:hidden;}
+        /* Sidebar */
+        .sidebar{width:var(--sidebar-width);min-width:var(--sidebar-width);background:var(--bg-sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:10;}
+        .sidebar-header{padding:16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);}
+        .sidebar-logo{width:28px;height:28px;background:#6b2fa0;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;}
+        .sidebar-title{font-weight:600;font-size:16px;}
+        .sidebar-nav{flex:1;overflow-y:auto;padding:8px;}
+        .sidebar-section{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;padding:12px 8px 4px;letter-spacing:0.5px;}
+        .sidebar-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;margin-bottom:2px;}
+        .sidebar-item:hover{background:#e1dfdd;}
+        .sidebar-item.active{background:#d0d0d0;font-weight:600;}
+        .sidebar-item .star{margin-left:auto;opacity:0;transition:opacity 0.1s;color:#f4b400;cursor:pointer;}
+        .sidebar-item:hover .star,.sidebar-item .star.fav{opacity:1;}
+        .sidebar-new-btn{display:flex;align-items:center;gap:8px;margin:8px;padding:8px;cursor:pointer;color:var(--accent);font-weight:500;border:none;background:transparent;border-radius:var(--radius-sm);width:calc(100% - 16px);}
+        .sidebar-new-btn:hover{background:#deecf9;}
+        /* Main */
+        .main-content{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;}
+        .top-bar{height:48px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:8px;background:white;}
+        .list-name-display{font-weight:600;font-size:16px;cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm);}
+        .list-name-display:hover{background:#f0f0f0;}
+        .tab-bar{display:flex;margin-left:12px;}
+        .tab{padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;color:var(--text-secondary);font-size:13px;}
+        .tab.active{border-bottom-color:var(--accent);color:var(--accent);font-weight:600;}
+        .actions-right{margin-left:auto;display:flex;gap:4px;align-items:center;}
+        .btn-icon{width:36px;height:36px;border:none;background:transparent;border-radius:var(--radius-sm);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-secondary);}
+        .btn-icon:hover{background:#e1dfdd;}
+        .command-bar{height:40px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 8px;gap:2px;background:white;overflow-x:auto;}
+        .cmd-btn{padding:5px 10px;cursor:pointer;border:none;background:transparent;border-radius:var(--radius-sm);font-size:13px;display:flex;align-items:center;gap:4px;color:var(--text-primary);white-space:nowrap;}
+        .cmd-btn:hover{background:#e1dfdd;}
+        .cmd-sep{width:1px;height:20px;background:var(--border);margin:0 4px;}
+        .grid-container{flex:1;overflow:auto;background:white;}
+        table{border-collapse:collapse;width:max-content;min-width:100%;table-layout:fixed;}
+        th{background:#faf9f8;border-bottom:2px solid #e1dfdd;border-right:1px solid #e8e6e3;padding:0;font-weight:600;font-size:13px;color:var(--text-secondary);position:sticky;top:0;z-index:3;white-space:nowrap;}
+        th .th-inner{display:flex;align-items:center;padding:6px 10px;height:36px;gap:4px;position:relative;}
+        th .th-inner:hover{background:#f0f0f0;}
+        th .col-icon{font-size:14px;opacity:0.7;}
+        th .col-name{flex:1;overflow:hidden;text-overflow:ellipsis;}
+        th .col-menu-btn{cursor:pointer;padding:2px 4px;border-radius:2px;opacity:0;transition:opacity 0.1s;}
+        th:hover .col-menu-btn{opacity:1;}
+        th .resize-handle{position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:2;}
+        td{border-bottom:1px solid #e1dfdd;border-right:1px solid #e8e6e3;padding:6px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;}
+        tr:hover td{background:#f5f5f5;}
+        tr.selected td{background:#edebe9;}
+        .gallery-container{display:none;flex:1;overflow:auto;padding:16px;flex-wrap:wrap;gap:12px;background:#faf9f8;align-content:flex-start;}
+        .gallery-container.active{display:flex;}
+        .gallery-card{width:240px;background:white;border:1px solid #e1dfdd;border-radius:var(--radius-md);padding:14px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,0.04);position:relative;}
+        .gallery-card:hover{box-shadow:0 4px 8px rgba(0,0,0,0.08);}
+        .gallery-card.selected{border-color:var(--accent);}
+        /* Panel Kanan */
+        .panel-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:50;display:none;}
+        .panel-overlay.show{display:block;}
+        .panel{position:fixed;top:0;right:-500px;width:460px;height:100vh;background:white;box-shadow:-8px 0 32px rgba(0,0,0,0.15);z-index:60;transition:right 0.2s ease;display:flex;flex-direction:column;}
+        .panel.open{right:0;}
+        .panel-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+        .panel-header h3{font-size:16px;font-weight:600;}
+        .panel-close{background:none;border:none;font-size:18px;cursor:pointer;padding:4px;border-radius:var(--radius-sm);}
+        .panel-close:hover{background:#e1dfdd;}
+        .panel-body{flex:1;overflow-y:auto;padding:20px;}
+        .panel-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
+        .form-group{margin-bottom:12px;}
+        .form-group label{display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;}
+        .form-group input,.form-group select,.form-group textarea{width:100%;padding:6px 10px;border:1px solid #8a8886;border-radius:var(--radius-sm);font-size:14px;}
+        .btn-primary{background:var(--accent);color:white;border:none;padding:6px 16px;border-radius:var(--radius-sm);font-weight:600;cursor:pointer;}
+        .btn-primary:hover{background:var(--accent-hover);}
+        .btn-secondary{background:white;border:1px solid var(--border);padding:6px 16px;border-radius:var(--radius-sm);cursor:pointer;}
+        /* Context Menu */
+        .ctx-menu{position:fixed;background:white;border:1px solid #e1dfdd;border-radius:var(--radius-md);box-shadow:0 4px 12px rgba(0,0,0,0.12);z-index:150;min-width:200px;padding:4px 0;display:none;}
+        .ctx-menu .ctx-item{padding:8px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;}
+        .ctx-menu .ctx-item:hover{background:#f5f5f5;}
+        /* Inline edit */
+        .inline-input{padding:2px 6px;width:100%;border:2px solid var(--accent);border-radius:2px;font-family:inherit;font-size:13px;}
+        /* Toast */
+        .toast-container{position:fixed;bottom:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px;}
+        .toast{background:#323130;color:white;padding:12px 20px;border-radius:var(--radius-md);animation:slideIn 0.3s;}
+        @keyframes slideIn{from{transform:translateX(100px);opacity:0;}}
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">📋</div>
+            <div class="sidebar-title">Lists</div>
+        </div>
+        <nav class="sidebar-nav" id="sidebarNav"></nav>
+        <button class="sidebar-new-btn" onclick="createNewList()">➕ Buat List Baru</button>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="top-bar">
+            <span class="list-name-display" id="listNameDisplay" onclick="renameList()">Daftar Tugas</span>
+            <div class="tab-bar">
+                <div class="tab active" data-view="grid" onclick="switchView('grid')">📊 Grid</div>
+                <div class="tab" data-view="gallery" onclick="switchView('gallery')">🖼️ Galeri</div>
+            </div>
+            <div class="actions-right">
+                <button class="btn-icon" onclick="shareList()" title="Bagikan">🔗</button>
+                <button class="btn-icon" onclick="exportCSV()" title="Ekspor CSV">📥</button>
+                <button class="btn-icon" onclick="moreOptions()" title="Opsi Lainnya">⋯</button>
+            </div>
+        </div>
+        <div class="command-bar" id="commandBar">
+            <button class="cmd-btn" onclick="addNewItem()">➕ Item Baru</button>
+            <span class="cmd-sep"></span>
+            <button class="cmd-btn" onclick="editSelectedItem()">✏️ Edit</button>
+            <button class="cmd-btn" onclick="deleteSelectedItems()">🗑️ Hapus</button>
+            <span class="cmd-sep"></span>
+            <button class="cmd-btn" onclick="openAddColumnPanel()">📌 Tambah Kolom</button>
+            <button class="cmd-btn" onclick="openFilterPanel()">🔍 Filter</button>
+            <span class="cmd-sep"></span>
+            <button class="cmd-btn" onclick="groupByColumn()">📐 Group By</button>
+            <button class="cmd-btn" onclick="automateFlow()">⚡ Automate</button>
+            <button class="cmd-btn" onclick="integrateApp()">🧩 Integrate</button>
+        </div>
+        <div class="grid-container" id="gridContainer">
+            <table id="gridTable"><thead id="gridHead"></thead><tbody id="gridBody"></tbody></table>
+        </div>
+        <div class="gallery-container" id="galleryContainer"></div>
+    </main>
+
+    <!-- Panel Overlay -->
+    <div class="panel-overlay" id="panelOverlay" onclick="closePanel()"></div>
+
+    <!-- Panel Tambah Kolom -->
+    <div class="panel" id="addColumnPanel">
+        <div class="panel-header"><h3>Tambah Kolom</h3><button class="panel-close" onclick="closePanel()">✕</button></div>
+        <div class="panel-body">
+            <div class="form-group"><label>Nama Kolom</label><input type="text" id="newColName" placeholder="Masukkan nama kolom"></div>
+            <div class="form-group"><label>Tipe</label><select id="newColType" onchange="updateColTypeOptions()">
+                <option value="text">Teks Satu Baris</option>
+                <option value="multiline">Teks Banyak Baris</option>
+                <option value="number">Angka</option>
+                <option value="choice">Pilihan</option>
+                <option value="date">Tanggal</option>
+                <option value="yesno">Ya/Tidak</option>
+                <option value="person">Orang</option>
+                <option value="hyperlink">Hyperlink</option>
+            </select></div>
+            <div class="form-group" id="choicesGroup" style="display:none;"><label>Pilihan (pisahkan dengan koma)</label><input type="text" id="newColChoices" placeholder="Opsi 1, Opsi 2, Opsi 3"></div>
+            <div class="form-group"><label>Lebar (px)</label><input type="number" id="newColWidth" value="180" min="60"></div>
+        </div>
+        <div class="panel-footer">
+            <button class="btn-secondary" onclick="closePanel()">Batal</button>
+            <button class="btn-primary" onclick="addColumnFromPanel()">Tambah</button>
+        </div>
+    </div>
+
+    <!-- Panel Edit Item -->
+    <div class="panel" id="editItemPanel">
+        <div class="panel-header"><h3>Detail Item</h3><button class="panel-close" onclick="closePanel()">✕</button></div>
+        <div class="panel-body" id="editItemFormBody"></div>
+        <div class="panel-footer">
+            <button class="btn-secondary" onclick="closePanel()">Batal</button>
+            <button class="btn-primary" id="saveItemBtn">Simpan</button>
+        </div>
+    </div>
+
+    <!-- Panel Filter -->
+    <div class="panel" id="filterPanel">
+        <div class="panel-header"><h3>Filter & Urutkan</h3><button class="panel-close" onclick="closeFilterPanel()">✕</button></div>
+        <div class="panel-body">
+            <div class="form-group"><label>Urutkan Kolom</label><select id="sortColSelect" onchange="applySort()"></select></div>
+            <div class="form-group"><label>Arah</label><select id="sortDirSelect" onchange="applySort()"><option value="asc">A → Z</option><option value="desc">Z → A</option></select></div>
+            <div class="form-group"><label>Cari Teks</label><input type="text" id="searchInput" placeholder="Ketik kata kunci..." oninput="applyFilter()"></div>
+        </div>
+        <div class="panel-footer"><button class="btn-secondary" onclick="clearFilters()">Reset</button></div>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="ctx-menu" id="ctxMenu"></div>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyBwVp9B32z2BJTI76nAUOjYfFcNuraHUr8",
+            authDomain: "mslists-clone.firebaseapp.com",
+            projectId: "mslists-clone",
+            storageBucket: "mslists-clone.firebasestorage.app",
+            messagingSenderId: "847404593830",
+            appId: "1:847404593830:web:f16e2c774ab73427543a67"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let currentListId = null, currentList = null, selectedItems = new Set();
+        let currentView = 'grid', allLists = [], unsubscribe = null;
+        let currentSortCol = null, currentSortDir = 'asc', currentSearch = '';
+        let isResizing = false, resizeColId = null, resizeStartX = 0, startWidth = 0;
+        let inlineEditCell = null; // { itemId, colId }
+
+        const $ = (id) => document.getElementById(id);
+
+        // Init
+        async function init() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const listId = urlParams.get('list');
+            await loadAllLists();
+            if (listId) await openList(listId);
+            else {
+                const last = localStorage.getItem('ms_last');
+                if (last && allLists.some(l => l.id === last)) await openList(last);
+                else if (allLists.length) await openList(allLists[0].id);
+                else await createDefaultList();
+            }
+            document.addEventListener('click', () => { hideCtxMenu(); if (inlineEditCell) finishInlineEdit(); });
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && inlineEditCell) finishInlineEdit(); });
+        }
+
+        async function loadAllLists() {
+            const snap = await db.collection('lists').get();
+            allLists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            renderSidebar();
+        }
+
+        function renderSidebar() {
+            const nav = document.getElementById('sidebarNav');
+            const favLists = allLists.filter(l => l.favorite);
+            const recent = JSON.parse(localStorage.getItem('ms_recent') || '[]');
+            nav.innerHTML = `
+                <div class="sidebar-section">⭐ Favorit</div>
+                ${favLists.length === 0 ? '<div class="sidebar-item" style="color:gray;font-style:italic;">Tidak ada favorit</div>' : ''}
+                ${favLists.map(l => sidebarItemHTML(l)).join('')}
+                <div class="sidebar-section">🕒 Terbaru</div>
+                ${recent.slice(0,5).map(id => allLists.find(l => l.id === id)).filter(Boolean).map(l => sidebarItemHTML(l)).join('')}
+                <div class="sidebar-section">📁 Semua List</div>
+                ${allLists.filter(l => !favLists.includes(l)).map(l => sidebarItemHTML(l)).join('')}
+            `;
+        }
+
+        function sidebarItemHTML(l) {
+            const isActive = l.id === currentListId;
+            const isFav = l.favorite;
+            return `
+                <div class="sidebar-item ${isActive ? 'active' : ''}" onclick="openList('${l.id}')">
+                    📋 ${esc(l.name)}
+                    <span class="star ${isFav ? 'fav' : ''}" onclick="event.stopPropagation(); toggleFavorite('${l.id}')">⭐</span>
+                </div>`;
+        }
+
+        async function toggleFavorite(listId) {
+            const list = allLists.find(l => l.id === listId);
+            if (list) {
+                list.favorite = !list.favorite;
+                await db.collection('lists').doc(listId).update({ favorite: list.favorite });
+                renderSidebar();
+            }
+        }
+
+        async function openList(listId) {
+            if (unsubscribe) unsubscribe();
+            currentListId = listId;
+            localStorage.setItem('ms_last', listId);
+            let recent = JSON.parse(localStorage.getItem('ms_recent') || '[]');
+            recent = [listId, ...recent.filter(id => id !== listId)].slice(0,10);
+            localStorage.setItem('ms_recent', JSON.stringify(recent));
+            window.history.replaceState({}, '', `?list=${listId}`);
+            unsubscribe = db.collection('lists').doc(listId).onSnapshot(doc => {
+                if (doc.exists) {
+                    currentList = { id: doc.id, ...doc.data() };
+                    renderAll();
+                } else {
+                    alert('List dihapus');
+                    window.location.href = '/';
+                }
+            });
+            selectedItems.clear();
+            currentSortCol = null; currentSearch = '';
+            renderAll();
+            renderSidebar();
+        }
+
+        async function createDefaultList() {
+            const ref = await db.collection('lists').add({
+                name: 'Daftar Tugas',
+                favorite: false,
+                columns: [
+                    { id: 'col-1', name: 'Judul', type: 'text', width: 200 },
+                    { id: 'col-2', name: 'Status', type: 'choice', width: 150, choices: ['Belum', 'Proses', 'Selesai'] },
+                    { id: 'col-3', name: 'Tenggat', type: 'date', width: 140 },
+                    { id: 'col-4', name: 'Prioritas', type: 'choice', width: 120, choices: ['Tinggi','Sedang','Rendah'] }
+                ],
+                items: []
+            });
+            await loadAllLists();
+            await openList(ref.id);
+        }
+
+        async function createNewList() {
+            const name = prompt('Nama list baru:');
+            if (!name) return;
+            const ref = await db.collection('lists').add({
+                name,
+                favorite: false,
+                columns: [{ id: 'col-1', name: 'Judul', type: 'text', width: 200 }],
+                items: []
+            });
+            await loadAllLists();
+            await openList(ref.id);
+        }
+
+        async function renameList() {
+            const newName = prompt('Nama baru:', currentList.name);
+            if (newName && newName.trim()) {
+                await db.collection('lists').doc(currentListId).update({ name: newName.trim() });
+            }
+        }
+
+        function getCols() { return currentList?.columns || []; }
+        function getItems() {
+            let items = currentList?.items || [];
+            if (currentSearch) {
+                const s = currentSearch.toLowerCase();
+                items = items.filter(item => getCols().some(c => String(item[c.id] || '').toLowerCase().includes(s)));
+            }
+            if (currentSortCol) {
+                const col = getCols().find(c => c.id === currentSortCol);
+                items = [...items].sort((a, b) => {
+                    let va = a[currentSortCol] ?? '', vb = b[currentSortCol] ?? '';
+                    if (col?.type === 'number') { va = +va; vb = +vb; }
+                    else if (col?.type === 'date') { va = new Date(va).getTime() || 0; vb = new Date(vb).getTime() || 0; }
+                    else { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
+                    return (va < vb ? -1 : 1) * (currentSortDir === 'asc' ? 1 : -1);
+                });
+            }
+            return items;
+        }
+
+        // Render
+        function renderAll() {
+            if (!currentList) return;
+            $('listNameDisplay').textContent = currentList.name;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab[data-view="${currentView}"]`).classList.add('active');
+            $('gridContainer').style.display = currentView === 'grid' ? '' : 'none';
+            $('galleryContainer').classList.toggle('active', currentView === 'gallery');
+            renderGrid();
+            renderGallery();
+        }
+
+        function renderGrid() {
+            const cols = getCols(), items = getItems();
+            $('gridHead').innerHTML = `<tr>
+                <th style="width:40px;"><input type="checkbox" onchange="toggleAll(this)"></th>
+                <th style="width:40px;text-align:center;">#</th>
+                ${cols.map(c => `
+                    <th style="width:${c.width || 150}px; position:relative;">
+                        <div class="th-inner" onclick="sortBy('${c.id}')">
+                            <span class="col-icon">${typeIcon(c.type)}</span>
+                            <span class="col-name">${esc(c.name)}</span>
+                            <span class="col-menu-btn" onclick="event.stopPropagation(); showCtxMenu(event, '${c.id}')">▾</span>
+                        </div>
+                        <div class="resize-handle" onmousedown="startResize(event, '${c.id}')"></div>
+                    </th>
+                `).join('')}
+                <th style="width:48px; text-align:center; cursor:pointer;" onclick="openAddColumnPanel()" title="Tambah Kolom">➕</th>
+            </tr>`;
+            $('gridBody').innerHTML = items.length === 0
+                ? `<tr><td colspan="${cols.length+3}" style="text-align:center;padding:40px;">Klik "Item Baru" untuk memulai</td></tr>`
+                : items.map((item, idx) => `
+                    <tr class="${selectedItems.has(item.id)?'selected':''}" onclick="selectRow(event, '${item.id}')">
+                        <td><input type="checkbox" ${selectedItems.has(item.id)?'checked':''} onclick="event.stopPropagation(); toggleSelect('${item.id}', this.checked)"></td>
+                        <td style="text-align:center;color:gray;">${idx+1}</td>
+                        ${cols.map(c => `<td ondblclick="startInlineEdit(event, '${item.id}', '${c.id}')">${formatCell(c, item[c.id])}</td>`).join('')}
+                        <td></td>
+                    </tr>`).join('') + `
+                <tr class="row-add" onclick="addNewItem()">
+                    <td></td><td></td>${cols.map(() => '<td style="color:#aaa; cursor:pointer;">+ Tambah item</td>').join('')}<td></td>
+                </tr>`;
+        }
+
+        function renderGallery() {
+            const cols = getCols(), items = getItems();
+            $('galleryContainer').innerHTML = items.map(item => `
+                <div class="gallery-card ${selectedItems.has(item.id)?'selected':''}" onclick="selectRow(event, '${item.id}')" ondblclick="editItemPanel('${item.id}')">
+                    <div style="font-weight:600;">${esc(String(item[cols[0]?.id] || ''))}</div>
+                    <div style="font-size:12px;color:gray;margin-top:6px;">
+                        ${cols.slice(1).map(c => `<div>${c.name}: ${esc(String(item[c.id]||''))}</div>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function formatCell(col, val) {
+            if (val === undefined || val === null || val === '') return '<span style="color:#aaa;">Kosong</span>';
+            if (col.type === 'choice') return `<span style="background:#deecf9;padding:2px 8px;border-radius:10px;">${esc(String(val))}</span>`;
+            if (col.type === 'yesno') return val ? '✅' : '⬜';
+            if (col.type === 'hyperlink') return `<a href="${esc(String(val))}" target="_blank">🔗</a>`;
+            if (col.type === 'date') {
+                try { return new Date(val).toLocaleDateString('id-ID'); } catch { return esc(String(val)); }
+            }
+            return esc(String(val));
+        }
+
+        function typeIcon(t) {
+            return { text:'🔤', multiline:'📝', number:'🔢', choice:'🏷️', date:'📅', yesno:'☑️', person:'👤', hyperlink:'🔗' }[t] || '📄';
+        }
+
+        // Inline editing
+        function startInlineEdit(e, itemId, colId) {
+            if (inlineEditCell) finishInlineEdit();
+            const item = getItems().find(i => i.id === itemId);
+            if (!item) return;
+            const col = getCols().find(c => c.id === colId);
+            if (!col) return;
+            const td = e.target;
+            const oldHTML = td.innerHTML;
+            let inputHTML = '';
+            if (col.type === 'choice') {
+                inputHTML = `<select class="inline-input" id="inlineInput">${(col.choices||[]).map(o => `<option value="${esc(o)}" ${item[colId]===o?'selected':''}>${esc(o)}</option>`)}</select>`;
+            } else if (col.type === 'yesno') {
+                inputHTML = `<select class="inline-input" id="inlineInput"><option value="true" ${item[colId]?'selected':''}>Ya</option><option value="false" ${!item[colId]?'selected':''}>Tidak</option></select>`;
+            } else {
+                inputHTML = `<input class="inline-input" id="inlineInput" value="${esc(String(item[colId]||''))}">`;
+            }
+            td.innerHTML = inputHTML;
+            const inp = document.getElementById('inlineInput');
+            inp.focus();
+            inlineEditCell = { itemId, colId, td, oldHTML };
+            inp.addEventListener('blur', finishInlineEdit);
+            inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') finishInlineEdit(); });
+        }
+
+        async function finishInlineEdit() {
+            if (!inlineEditCell) return;
+            const { itemId, colId, td, oldHTML } = inlineEditCell;
+            const inp = document.getElementById('inlineInput');
+            const newVal = inp ? (inp.tagName === 'SELECT' ? inp.value : inp.value) : null;
+            if (newVal !== null && currentList) {
+                const updatedItems = getItems().map(i => {
+                    if (i.id === itemId) {
+                        const updated = { ...i };
+                        updated[colId] = newVal;
+                        return updated;
+                    }
+                    return i;
+                });
+                await updateList({ items: updatedItems });
+                td.innerHTML = oldHTML; // akan dirender ulang oleh listener
+            }
+            inlineEditCell = null;
+        }
+
+        // CRUD Items
+        async function addNewItem() {
+            const item = { id: 'i' + Date.now() };
+            getCols().forEach(c => { item[c.id] = c.type === 'yesno' ? false : ''; });
+            await updateList({ items: [...getItems(), item] });
+        }
+
+        async function deleteSelectedItems() {
+            if (selectedItems.size === 0) return;
+            if (!confirm(`Hapus ${selectedItems.size} item?`)) return;
+            const newItems = getItems().filter(i => !selectedItems.has(i.id));
+            selectedItems.clear();
+            await updateList({ items: newItems });
+        }
+
+        function editSelectedItem() {
+            if (selectedItems.size !== 1) return;
+            editItemPanel([...selectedItems][0]);
+        }
+
+        function editItemPanel(itemId) {
+            const item = getItems().find(i => i.id === itemId);
+            if (!item) return;
+            const cols = getCols();
+            $('editItemFormBody').innerHTML = cols.map(c => {
+                const val = item[c.id] ?? '';
+                let input;
+                if (c.type === 'choice') {
+                    input = `<select id="ei-${c.id}">${(c.choices || []).map(o => `<option value="${esc(o)}" ${val === o ? 'selected' : ''}>${esc(o)}</option>`)}</select>`;
+                } else if (c.type === 'yesno') {
+                    input = `<select id="ei-${c.id}"><option value="true" ${val ? 'selected' : ''}>Ya</option><option value="false" ${!val ? 'selected' : ''}>Tidak</option></select>`;
+                } else if (c.type === 'date') {
+                    input = `<input type="date" id="ei-${c.id}" value="${val}">`;
+                } else if (c.type === 'multiline') {
+                    input = `<textarea id="ei-${c.id}">${esc(String(val))}</textarea>`;
+                } else {
+                    input = `<input id="ei-${c.id}" value="${esc(String(val))}">`;
+                }
+                return `<div class="form-group"><label>${esc(c.name)}</label>${input}</div>`;
+            }).join('');
+            $('saveItemBtn').onclick = async () => {
+                const newItem = { ...item };
+                cols.forEach(c => {
+                    const el = document.getElementById('ei-' + c.id);
+                    newItem[c.id] = c.type === 'yesno' ? el.value === 'true' : el.value;
+                });
+                await updateList({ items: getItems().map(i => i.id === itemId ? newItem : i) });
+                closePanel();
+            };
+            openPanel($('editItemPanel'));
+        }
+
+        // Kolom
+        function openAddColumnPanel() {
+            document.getElementById('newColName').value = '';
+            document.getElementById('newColType').value = 'text';
+            document.getElementById('newColWidth').value = 180;
+            document.getElementById('newColChoices').value = '';
+            updateColTypeOptions();
+            openPanel($('addColumnPanel'));
+        }
+
+        function updateColTypeOptions() {
+            const type = document.getElementById('newColType').value;
+            document.getElementById('choicesGroup').style.display = type === 'choice' ? '' : 'none';
+        }
+
+        async function addColumnFromPanel() {
+            const name = document.getElementById('newColName').value.trim();
+            if (!name) return;
+            const type = document.getElementById('newColType').value;
+            const width = parseInt(document.getElementById('newColWidth').value) || 180;
+            const col = { id: 'c' + Date.now(), name, type, width };
+            if (type === 'choice') {
+                col.choices = document.getElementById('newColChoices').value.split(',').map(s => s.trim()).filter(Boolean);
+                if (col.choices.length === 0) col.choices = ['Opsi 1'];
+            }
+            await updateList({ columns: [...getCols(), col] });
+            closePanel();
+            showToast(`Kolom "${name}" ditambahkan`);
+        }
+
+        // Filter Panel
+        function openFilterPanel() {
+            const cols = getCols();
+            $('sortColSelect').innerHTML = '<option value="">-- Tidak diurutkan --</option>' + cols.map(c => `<option value="${c.id}" ${c.id === currentSortCol ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+            $('sortDirSelect').value = currentSortDir;
+            $('searchInput').value = currentSearch;
+            openPanel($('filterPanel'));
+        }
+
+        function applySort() {
+            currentSortCol = $('sortColSelect').value || null;
+            currentSortDir = $('sortDirSelect').value;
+            renderGrid(); renderGallery();
+        }
+
+        function applyFilter() {
+            currentSearch = $('searchInput').value;
+            renderGrid(); renderGallery();
+        }
+
+        function clearFilters() {
+            currentSortCol = null; currentSortDir = 'asc'; currentSearch = '';
+            $('searchInput').value = '';
+            $('sortColSelect').value = '';
+            $('sortDirSelect').value = 'asc';
+            renderGrid(); renderGallery();
+            closePanel();
+        }
+
+        function closeFilterPanel() {
+            $('filterPanel').classList.remove('open');
+            $('panelOverlay').classList.remove('show');
+        }
+
+        // Context Menu Kolom
+        function showCtxMenu(e, colId) {
+            e.stopPropagation();
+            const menu = $('ctxMenu');
+            menu.innerHTML = `
+                <div class="ctx-item" onclick="sortBy('${colId}','asc');hideCtxMenu()">Urutkan A → Z</div>
+                <div class="ctx-item" onclick="sortBy('${colId}','desc');hideCtxMenu()">Urutkan Z → A</div>
+                <div class="ctx-item" onclick="filterByColumn('${colId}');hideCtxMenu()">Filter berdasarkan kolom ini</div>
+                <div class="ctx-item" onclick="groupByColumn('${colId}');hideCtxMenu()">Grup berdasarkan kolom ini</div>
+                <div class="ctx-item" onclick="hideColumn('${colId}')">Sembunyikan Kolom</div>
+                <div class="ctx-item" onclick="deleteColumn('${colId}')">Hapus Kolom</div>
+            `;
+            menu.style.display = 'block';
+            menu.style.left = Math.min(e.clientX, window.innerWidth - 220) + 'px';
+            menu.style.top = e.clientY + 'px';
+            setTimeout(() => document.addEventListener('click', hideCtxMenu, { once: true }), 10);
+        }
+
+        function hideCtxMenu() { $('ctxMenu').style.display = 'none'; }
+
+        function sortBy(colId, dir) {
+            currentSortCol = colId;
+            currentSortDir = dir || (currentSortDir === 'asc' ? 'desc' : 'asc');
+            renderGrid(); renderGallery();
+        }
+
+        function filterByColumn(colId) {
+            const col = getCols().find(c => c.id === colId);
+            const val = prompt(`Filter ${col.name} mengandung:`);
+            if (val) {
+                currentSearch = val.toLowerCase();
+                renderGrid(); renderGallery();
+            }
+        }
+
+        function groupByColumn(colId) {
+            currentSortCol = colId;
+            currentSortDir = 'asc';
+            renderGrid(); renderGallery();
+            showToast('Dikelompokkan berdasarkan ' + getCols().find(c=>c.id===colId)?.name);
+        }
+
+        async function hideColumn(colId) {
+            const cols = getCols().filter(c => c.id !== colId);
+            await updateList({ columns: cols });
+            showToast('Kolom disembunyikan');
+        }
+
+        async function deleteColumn(colId) {
+            if (!confirm('Hapus kolom ini dan semua datanya?')) return;
+            const cols = getCols().filter(c => c.id !== colId);
+            await updateList({ columns: cols });
+            showToast('Kolom dihapus');
+        }
+
+        // Resize
+        function startResize(e, colId) {
+            isResizing = true;
+            resizeColId = colId;
+            resizeStartX = e.clientX;
+            const col = getCols().find(c => c.id === colId);
+            startWidth = col?.width || 150;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        }
+
+        function handleMouseMove(e) {
+            if (!isResizing) return;
+            const diff = e.clientX - resizeStartX;
+            const newWidth = Math.max(60, startWidth + diff);
+            const col = getCols().find(c => c.id === resizeColId);
+            if (col) {
+                col.width = newWidth;
+                renderGrid();
+            }
+        }
+
+        function handleMouseUp() {
+            if (isResizing) {
+                isResizing = false;
+                resizeColId = null;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                if (currentList) db.collection('lists').doc(currentListId).update({ columns: getCols() });
+            }
+        }
+
+        // Selection
+        function toggleAll(cb) {
+            getItems().forEach(i => cb.checked ? selectedItems.add(i.id) : selectedItems.delete(i.id));
+            renderGrid(); renderGallery();
+        }
+        function toggleSelect(id, checked) {
+            checked ? selectedItems.add(id) : selectedItems.delete(id);
+            renderGrid(); renderGallery();
+        }
+        function selectRow(e, id) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'A') return;
+            if (e.ctrlKey || e.metaKey) toggleSelect(id, !selectedItems.has(id));
+            else { selectedItems.clear(); selectedItems.add(id); renderGrid(); renderGallery(); }
+        }
+
+        // Panels
+        function openPanel(panel) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('open'));
+            panel.classList.add('open');
+            $('panelOverlay').classList.add('show');
+        }
+        function closePanel() {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('open'));
+            $('panelOverlay').classList.remove('show');
+        }
+
+        function shareList() {
+            navigator.clipboard.writeText(`${location.origin}${location.pathname}?list=${currentListId}`);
+            showToast('🔗 Link disalin! Bagikan ke rekan Anda.');
+        }
+
+        function exportCSV() {
+            const cols = getCols(), items = getItems();
+            let csv = '\uFEFF' + cols.map(c => c.name).join(',') + '\n';
+            items.forEach(item => csv += cols.map(c => `"${String(item[c.id]||'').replace(/"/g,'""')}"`).join(',') + '\n');
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+            a.download = (currentList.name || 'list') + '.csv';
+            a.click();
+        }
+
+        function switchView(v) { currentView = v; renderAll(); }
+        function automateFlow() { showToast('Power Automate - fitur lanjutan'); }
+        function integrateApp() { showToast('Power Apps - fitur lanjutan'); }
+        function moreOptions() { showToast('Opsi lainnya (Settings, Print, dll.) - demo'); }
+
+        async function updateList(data) { await db.collection('lists').doc(currentListId).update(data); }
+
+        function showToast(msg) {
+            const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+            $('toastContainer').appendChild(t);
+            setTimeout(() => t.remove(), 2500);
+        }
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        init();
+    </script>
+</body>
+</html>
